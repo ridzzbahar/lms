@@ -1,0 +1,297 @@
+/* ==========================================================================
+   MOODLE MONOCHROME SWISS-STYLE SYSTEM
+   Design Architecture: Swiss Minimalist & High-Usability Monochrome
+   Compatible with: Moodle 4.0+ (Boost Theme & Bootstrap 5)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. COLOR VARIABLES & THEME DEFINITIONS
+   -------------------------------------------------------------------------- */
+:root {
+    /* Light Mode Palette */
+    --mono-bg: #ffffff;
+    --mono-surface: #f8f9fa;
+    --mono-surface-hover: #f1f3f5;
+    --mono-border: #e4e4e7;
+    --mono-border-strong: #18181b;
+    --mono-text-primary: #09090b;
+    --mono-text-secondary: #52525b;
+    --mono-text-muted: #71717a;
+    --mono-accent: #000000;
+    --mono-accent-text: #ffffff;
+    --mono-radius: 4px;
+    --mono-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --mono-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+
+    /* Moodle & Bootstrap Variable Overrides */
+    --primary: var(--mono-accent);
+    --secondary: var(--mono-text-secondary);
+    --body-bg: var(--mono-bg);
+    --body-color: var(--mono-text-primary);
+    --card-bg: var(--mono-surface);
+    --card-border-color: var(--mono-border);
+}
+
+/* Dark Mode Activation */
+[data-bs-theme="dark"],
+[data-theme="dark"],
+.dark-mode,
+body.theme-dark {
+    --mono-bg: #09090b;
+    --mono-surface: #141417;
+    --mono-surface-hover: #1e1e24;
+    --mono-border: #27272a;
+    --mono-border-strong: #e4e4e7;
+    --mono-text-primary: #f4f4f5;
+    --mono-text-secondary: #a1a1aa;
+    --mono-text-muted: #71717a;
+    --mono-accent: #ffffff;
+    --mono-accent-text: #000000;
+    --mono-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+
+    --primary: var(--mono-accent);
+    --secondary: var(--mono-text-secondary);
+    --body-bg: var(--mono-bg);
+    --body-color: var(--mono-text-primary);
+    --card-bg: var(--mono-surface);
+    --card-border-color: var(--mono-border);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-bs-theme="light"]):not([data-theme="light"]) {
+        --mono-bg: #09090b;
+        --mono-surface: #141417;
+        --mono-surface-hover: #1e1e24;
+        --mono-border: #27272a;
+        --mono-border-strong: #e4e4e7;
+        --mono-text-primary: #f4f4f5;
+        --mono-text-secondary: #a1a1aa;
+        --mono-text-muted: #71717a;
+        --mono-accent: #ffffff;
+        --mono-accent-text: #000000;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   2. GLOBAL BASE & TYPOGRAPHY STYLES
+   -------------------------------------------------------------------------- */
+body {
+    background-color: var(--mono-bg) !important;
+    color: var(--mono-text-primary) !important;
+    font-family: var(--mono-font) !important;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
+}
+
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+    color: var(--mono-text-primary) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+}
+
+a {
+    color: var(--mono-text-primary);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+
+    &:hover {
+        color: var(--mono-text-secondary);
+    }
+}
+
+/* --------------------------------------------------------------------------
+   3. HEADER & PRIMARY NAVBAR
+   -------------------------------------------------------------------------- */
+.fixed-top.navbar,
+.navbar,
+.primary-navigation {
+    background-color: var(--mono-bg) !important;
+    border-bottom: 1px solid var(--mono-border) !important;
+    box-shadow: none !important;
+    padding: 0.75rem 1.5rem !important;
+
+    .navbar-brand {
+        font-weight: 800 !important;
+        letter-spacing: -0.03em !important;
+        text-transform: uppercase;
+        color: var(--mono-text-primary) !important;
+    }
+
+    .nav-link {
+        color: var(--mono-text-secondary) !important;
+        font-weight: 500 !important;
+
+        &:hover, &.active {
+            color: var(--mono-text-primary) !important;
+            background-color: var(--mono-surface) !important;
+            border-radius: var(--mono-radius) !important;
+        }
+    }
+}
+
+.dropdown-menu {
+    background-color: var(--mono-bg) !important;
+    border: 1px solid var(--mono-border) !important;
+    border-radius: var(--mono-radius) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+
+    .dropdown-item {
+        color: var(--mono-text-primary) !important;
+
+        &:hover, &:focus {
+            background-color: var(--mono-surface-hover) !important;
+        }
+
+        &.active {
+            background-color: var(--mono-accent) !important;
+            color: var(--mono-accent-text) !important;
+        }
+    }
+}
+
+/* --------------------------------------------------------------------------
+   4. NAVIGATION DRAWERS (SIDEBARS)
+   -------------------------------------------------------------------------- */
+[data-region="drawer"],
+.drawer,
+#theme_boost-drawers-primary,
+#theme_boost-drawers-courseindex,
+#theme_boost-drawers-blocks {
+    background-color: var(--mono-bg) !important;
+    border-right: 1px solid var(--mono-border) !important;
+    border-left: 1px solid var(--mono-border) !important;
+    box-shadow: none !important;
+
+    .drawerheader {
+        border-bottom: 1px solid var(--mono-border) !important;
+        .drawertitle {
+            font-weight: 700 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+            color: var(--mono-text-primary) !important;
+        }
+    }
+
+    .list-group-item {
+        background-color: transparent !important;
+        color: var(--mono-text-secondary) !important;
+        border-radius: var(--mono-radius) !important;
+
+        &:hover {
+            background-color: var(--mono-surface) !important;
+            color: var(--mono-text-primary) !important;
+        }
+
+        &.active, &[aria-current="true"] {
+            background-color: var(--mono-surface-hover) !important;
+            color: var(--mono-text-primary) !important;
+            font-weight: 600 !important;
+            border-left: 3px solid var(--mono-text-primary) !important;
+        }
+    }
+}
+
+/* --------------------------------------------------------------------------
+   5. DASHBOARD & COURSE CARDS
+   -------------------------------------------------------------------------- */
+.dashboard-card,
+.card,
+.block .card-body {
+    background-color: var(--mono-surface) !important;
+    border: 1px solid var(--mono-border) !important;
+    border-radius: var(--mono-radius) !important;
+    box-shadow: none !important;
+    transition: border-color 0.2s ease !important;
+
+    &:hover {
+        border-color: var(--mono-border-strong) !important;
+    }
+
+    .card-title, .coursename {
+        font-weight: 700 !important;
+        color: var(--mono-text-primary) !important;
+    }
+}
+
+.progress {
+    background-color: var(--mono-border) !important;
+    height: 6px !important;
+
+    .progress-bar {
+        background-color: var(--mono-accent) !important;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   6. COURSE CONTENT & ACTIVITIES
+   -------------------------------------------------------------------------- */
+.course-content {
+    .section {
+        border-bottom: 1px solid var(--mono-border) !important;
+        padding: 1.5rem 0 !important;
+
+        .sectionname {
+            font-weight: 800 !important;
+            color: var(--mono-text-primary) !important;
+        }
+    }
+
+    .activity-item, .activityitem {
+        background-color: var(--mono-surface) !important;
+        border: 1px solid var(--mono-border) !important;
+        border-radius: var(--mono-radius) !important;
+
+        &:hover {
+            border-color: var(--mono-border-strong) !important;
+            background-color: var(--mono-surface-hover) !important;
+        }
+
+        .activity-icon {
+            filter: grayscale(100%) !important;
+            opacity: 0.85;
+        }
+    }
+}
+
+/* --------------------------------------------------------------------------
+   7. BUTTONS & INPUT FORM CONTROLS
+   -------------------------------------------------------------------------- */
+.btn {
+    border-radius: var(--mono-radius) !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+}
+
+.btn-primary, .btn-dark {
+    background-color: var(--mono-accent) !important;
+    color: var(--mono-accent-text) !important;
+    border: 1px solid var(--mono-accent) !important;
+
+    &:hover {
+        opacity: 0.88 !important;
+    }
+}
+
+.btn-secondary, .btn-outline-secondary, .btn-light {
+    background-color: var(--mono-bg) !important;
+    color: var(--mono-text-primary) !important;
+    border: 1px solid var(--mono-border) !important;
+
+    &:hover {
+        background-color: var(--mono-surface-hover) !important;
+        border-color: var(--mono-border-strong) !important;
+    }
+}
+
+.form-control, .custom-select, .form-select {
+    background-color: var(--mono-bg) !important;
+    color: var(--mono-text-primary) !important;
+    border: 1px solid var(--mono-border) !important;
+
+    &:focus {
+        border-color: var(--mono-border-strong) !important;
+        box-shadow: 0 0 0 1px var(--mono-border-strong) !important;
+    }
+}
