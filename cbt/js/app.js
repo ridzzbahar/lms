@@ -648,6 +648,9 @@ const App = {
       { tab: 'classes',       label: this.t('classes'),       section: null },
       { tab: 'schedules',     label: this.t('schedules'),     section: null },
       { tab: 'cbt',           label: this.t('cbt'),           section: 'Evaluasi & Penilaian' },
+      ...(isStaff ? [
+        { tab: 'proctoring',  label: 'Pengawasan Ujian (Real-Time)', section: null }
+      ] : []),
       { tab: 'grades',        label: this.t('grades'),        section: null },
       { tab: 'attendance',    label: this.t('attendance'),    section: 'Presensi',    staffOnly: true },
       { tab: 'rekap',         label: this.t('rekap'),         section: null },
@@ -683,6 +686,7 @@ const App = {
       classes:       () => this.loadClasses(),
       schedules:     () => this.loadSchedules(),
       cbt:           () => this.loadCbt(),
+      proctoring:    () => this.loadProctoringDashboard(),
       attendance:    () => this.loadAttendanceInput(),
       rekap:         () => this.loadRekapAbsensi(),
       grades:        () => this.loadGradesModule(),
@@ -894,7 +898,10 @@ const App = {
               <button class="btn btn-primary btn-full" onclick="App.openCourseDetail(${c.id})">📖 Masuk Kelas & Materi</button>
               <div class="flex-gap-1 mt-1">
                 <button class="btn btn-outline" style="flex:1;" onclick="App.renderAppLayout('cbt')">📝 CBT (${c.quiz_count || 0})</button>
-                ${isStaff ? `<button class="btn btn-danger btn-sm" onclick="App.deleteCourse(${c.id})">🗑️</button>` : ''}
+                ${isStaff ? `
+                  <button class="btn btn-outline btn-sm" onclick="App.openEditCourseModal(${c.id})" title="Edit Mapel">✏️ Edit</button>
+                  <button class="btn btn-danger btn-sm" onclick="App.deleteCourse(${c.id})" title="Hapus Mapel">🗑️</button>
+                ` : ''}
               </div>
             </div>
           </div>
@@ -922,29 +929,38 @@ const App = {
   },
 
   openAddCourseModal() {
-    fetch('api/classes.php')
-      .then(r => r.json())
-      .then(d => {
-        const classes = d.classes || [];
-        const opts = `<option value="">- Semua Kelas (Umum) -</option>` + classes.map(cl => `<option value="${cl.id}">${this.escHtml(cl.class_name)}</option>`).join('');
-        this.openModal('Tambah Mata Pelajaran Baru', `
-          <form onsubmit="App.handleAddCourse(event)">
-            <div class="form-group mb-2"><label class="form-label">Kode Mapel</label><input type="text" id="c-code" class="form-control" placeholder="cth: RPL-PWB" required></div>
-            <div class="form-group mb-2"><label class="form-label">Nama Mata Pelajaran</label><input type="text" id="c-name" class="form-control" placeholder="cth: Pemrograman Web & Basis Data" required></div>
-            <div class="form-group mb-2"><label class="form-label">Jurusan</label>
-              <select id="c-major" class="form-control">
-                <option value="Umum">Umum (Semua Jurusan)</option>
-                <option value="RPL">RPL (Rekayasa Perangkat Lunak)</option>
-                <option value="SIJA">SIJA (Sistem Informatika Jaringan & Aplikasi)</option>
-                <option value="TKJ">TKJ (Teknik Komputer & Jaringan)</option>
-              </select>
-            </div>
-            <div class="form-group mb-2"><label class="form-label">Kelas</label><select id="c-class" class="form-control">${opts}</select></div>
-            <div class="form-group mb-3"><label class="form-label">Ikon (Emoji)</label><input type="text" id="c-icon" class="form-control" value="📚" maxlength="8"></div>
-            <div class="flex-end flex-gap-1"><button type="button" class="btn btn-secondary" onclick="App.closeModal()">Batal</button><button type="submit" class="btn btn-primary">Simpan</button></div>
-          </form>
-        `);
-      });
+    Promise.all([
+      fetch('api/classes.php').then(r => r.json()),
+      fetch('api/users.php?role=guru').then(r => r.json())
+    ]).then(([dClasses, dGurus]) => {
+      const classes = dClasses.classes || [];
+      const gurus = dGurus.users || [];
+      const classOpts = `<option value="">- Semua Kelas (Umum) -</option>` + classes.map(cl => `<option value="${cl.id}">${this.escHtml(cl.class_name)}</option>`).join('');
+      const guruOpts = `<option value="">- Pilih Guru Pengampu -</option>` + gurus.map(g => `<option value="${g.id}">${this.escHtml(g.name)} (${g.nip_nis || g.username})</option>`).join('');
+
+      this.openModal('Tambah Mata Pelajaran Baru', `
+        <form onsubmit="App.handleAddCourse(event)">
+          <div class="form-group mb-2"><label class="form-label">Kode Mapel *</label><input type="text" id="c-code" class="form-control" placeholder="cth: RPL-PWB" required></div>
+          <div class="form-group mb-2"><label class="form-label">Nama Mata Pelajaran *</label><input type="text" id="c-name" class="form-control" placeholder="cth: Pemrograman Web & Basis Data" required></div>
+          <div class="form-group mb-2"><label class="form-label">Guru Pengampu</label><select id="c-teacher" class="form-control">${guruOpts}</select></div>
+          <div class="form-group mb-2"><label class="form-label">Jurusan</label>
+            <select id="c-major" class="form-control">
+              <option value="Umum">Umum (Semua Jurusan)</option>
+              <option value="RPL">RPL (Rekayasa Perangkat Lunak)</option>
+              <option value="SIJA">SIJA (Sistem Informatika Jaringan & Aplikasi)</option>
+              <option value="TKJ">TKJ (Teknik Komputer & Jaringan)</option>
+              <option value="DKV">DKV (Desain Komunikasi Visual)</option>
+              <option value="TP">TP (Teknik Pemesinan)</option>
+              <option value="TKR">TKR (Teknik Kendaraan Ringan)</option>
+              <option value="TE">TE (Teknik Elektronika)</option>
+            </select>
+          </div>
+          <div class="form-group mb-2"><label class="form-label">Kelas / Rombel Target</label><select id="c-class" class="form-control">${classOpts}</select></div>
+          <div class="form-group mb-3"><label class="form-label">Ikon (Emoji)</label><input type="text" id="c-icon" class="form-control" value="📚" maxlength="8"></div>
+          <div class="flex-end flex-gap-1"><button type="button" class="btn btn-secondary" onclick="App.closeModal()">Batal</button><button type="submit" class="btn btn-primary">Simpan Mapel</button></div>
+        </form>
+      `);
+    });
   },
 
   handleAddCourse(e) {
@@ -955,11 +971,102 @@ const App = {
         action: 'create',
         course_code: document.getElementById('c-code').value,
         course_name: document.getElementById('c-name').value,
+        teacher_id: document.getElementById('c-teacher').value,
         major: document.getElementById('c-major').value,
         class_id: document.getElementById('c-class').value,
         icon: document.getElementById('c-icon').value
       })
     }).then(r => r.json()).then(d => { if (d.success) { this.closeModal(); this.loadCourses(); } else alert(d.message); });
+  },
+
+  openEditCourseModal(courseId) {
+    Promise.all([
+      fetch('api/courses.php').then(r => r.json()),
+      fetch('api/classes.php').then(r => r.json()),
+      fetch('api/users.php?role=guru').then(r => r.json())
+    ]).then(([dCourses, dClasses, dGurus]) => {
+      const courses = dCourses.courses || [];
+      const course = courses.find(c => c.id == courseId);
+      if (!course) return;
+
+      const classes = dClasses.classes || [];
+      const gurus = dGurus.users || [];
+      const classOpts = `<option value="">- Semua Kelas (Umum) -</option>` +
+        classes.map(cl => `<option value="${cl.id}" ${cl.id == course.class_id ? 'selected' : ''}>${this.escHtml(cl.class_name)}</option>`).join('');
+      const guruOpts = `<option value="">- Pilih Guru Pengampu -</option>` +
+        gurus.map(g => `<option value="${g.id}" ${g.id == course.teacher_id ? 'selected' : ''}>${this.escHtml(g.name)} (${g.nip_nis || g.username})</option>`).join('');
+
+      this.openModal('Edit Mata Pelajaran', `
+        <form onsubmit="App.handleEditCourse(event, ${courseId})">
+          <div class="form-group mb-2">
+            <label class="form-label">Kode Mapel</label>
+            <input type="text" id="ec-code" class="form-control" value="${this.escHtml(course.course_code)}" required>
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label">Nama Mata Pelajaran</label>
+            <input type="text" id="ec-name" class="form-control" value="${this.escHtml(course.course_name)}" required>
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label">Deskripsi</label>
+            <textarea id="ec-desc" class="form-control" rows="2">${this.escHtml(course.description || '')}</textarea>
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label">Guru Pengampu</label>
+            <select id="ec-teacher" class="form-control">${guruOpts}</select>
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label">Jurusan</label>
+            <select id="ec-major" class="form-control">
+              <option value="Umum" ${course.major === 'Umum' ? 'selected' : ''}>Umum (Semua Jurusan)</option>
+              <option value="RPL" ${course.major === 'RPL' ? 'selected' : ''}>RPL (Rekayasa Perangkat Lunak)</option>
+              <option value="SIJA" ${course.major === 'SIJA' ? 'selected' : ''}>SIJA (Sistem Informatika Jaringan & Aplikasi)</option>
+              <option value="TKJ" ${course.major === 'TKJ' ? 'selected' : ''}>TKJ (Teknik Komputer & Jaringan)</option>
+              <option value="DKV" ${course.major === 'DKV' ? 'selected' : ''}>DKV (Desain Komunikasi Visual)</option>
+              <option value="TP" ${course.major === 'TP' ? 'selected' : ''}>TP (Teknik Pemesinan)</option>
+              <option value="TKR" ${course.major === 'TKR' ? 'selected' : ''}>TKR (Teknik Kendaraan Ringan)</option>
+              <option value="TE" ${course.major === 'TE' ? 'selected' : ''}>TE (Teknik Elektronika)</option>
+            </select>
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label">Kelas Target</label>
+            <select id="ec-class" class="form-control">${classOpts}</select>
+          </div>
+          <div class="form-group mb-3">
+            <label class="form-label">Ikon (Emoji)</label>
+            <input type="text" id="ec-icon" class="form-control" value="${this.escHtml(course.icon || '📚')}" maxlength="8">
+          </div>
+          <div class="flex-end flex-gap-1">
+            <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Batal</button>
+            <button type="submit" class="btn btn-primary">💾 Simpan Perubahan</button>
+          </div>
+        </form>
+      `);
+    });
+  },
+
+  handleEditCourse(e, courseId) {
+    e.preventDefault();
+    fetch('api/courses.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update',
+        course_id: courseId,
+        course_code: document.getElementById('ec-code').value,
+        course_name: document.getElementById('ec-name').value,
+        description: document.getElementById('ec-desc').value,
+        teacher_id: document.getElementById('ec-teacher').value,
+        major: document.getElementById('ec-major').value,
+        class_id: document.getElementById('ec-class').value,
+        icon: document.getElementById('ec-icon').value
+      })
+    }).then(r => r.json()).then(d => {
+      if (d.success) {
+        this.closeModal();
+        this._toast('✅ Mata pelajaran berhasil diperbarui.');
+        this.loadCourses();
+      } else alert(d.message);
+    });
   },
 
   deleteCourse(id) {
@@ -1131,10 +1238,10 @@ const App = {
               </span>
             </div>
             <div style="color:var(--text-sub);font-size:0.88rem;margin-bottom:0.75rem;line-height:1.5;">${this.escHtml(a.description || 'Tidak ada deskripsi khusus.')}</div>
-            <div class="flex-between" style="font-size:0.82rem;color:var(--text-muted);border-top:1px solid var(--border);padding-top:0.75rem;">
+            <div class="flex-between" style="font-size:0.82rem;color:var(--text-muted);border-top:1px solid var(--border);padding-top:0.75rem;flex-wrap:wrap;gap:0.5rem;">
               <div>⏳ Tenggat: <b>${a.due_date ? new Date(a.due_date).toLocaleString('id-ID') : 'Tidak dibatasi'}</b> &bull; Nilai Maks: <b>${a.max_score}</b></div>
               <div>
-                ${!isStaff ? `<button class="btn btn-primary btn-sm" onclick="alert('Fitur pengumpulan tugas: serahkan berkas ke cbt/uploads/ atau guru pengampu.')">📤 Kumpulkan Tugas</button>` : ''}
+                ${!isStaff ? `<button class="btn btn-primary btn-sm" onclick="App.openSubmitAssignmentModal(${a.id}, ${courseId})">📤 Kirim / Upload Tugas</button>` : ''}
               </div>
             </div>
           </div>
@@ -1146,10 +1253,86 @@ const App = {
               <div class="section-title" style="font-size:1.1rem;">📝 Tugas & Pekerjaan Siswa</div>
               <div class="section-sub">Daftar tugas mandiri, proyek kejuruan, dan pekerjaan rumah.</div>
             </div>
+            ${isStaff ? `<button class="btn btn-primary btn-sm" onclick="App.openAddAssignmentModal(${courseId})">➕ Buat Tugas Baru</button>` : ''}
           </div>
           <div>${itemsHtml}</div>
         `;
       });
+  },
+
+  openSubmitAssignmentModal(assignmentId, courseId) {
+    this.openModal('Kirim / Upload Tugas Siswa', `
+      <form onsubmit="App.handleSubmitAssignment(event, ${assignmentId}, ${courseId})">
+        <div class="form-group mb-2">
+          <label class="form-label">Tautan / Link Berkas Tugas (Google Drive / PDF / ZIP / URL)</label>
+          <input type="url" id="sub-filepath" class="form-control" placeholder="https://drive.google.com/file/... atau link dokumen tugas">
+        </div>
+        <div class="form-group mb-3">
+          <label class="form-label">Catatan / Jawaban Teks (opsional)</label>
+          <textarea id="sub-notes" class="form-control" rows="3" placeholder="Tuliskan catatan atau rangkuman hasil pengerjaan tugas Anda..."></textarea>
+        </div>
+        <div class="flex-end flex-gap-1">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Batal</button>
+          <button type="submit" class="btn btn-primary">📤 Kirim Tugas</button>
+        </div>
+      </form>
+    `);
+  },
+
+  handleSubmitAssignment(e, assignmentId, courseId) {
+    e.preventDefault();
+    const body = {
+      assignment_id: assignmentId,
+      file_path: document.getElementById('sub-filepath').value,
+      notes: document.getElementById('sub-notes').value
+    };
+    fetch(`api/course_detail.php?action=submit_assignment&course_id=${courseId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(r => r.json()).then(res => {
+      if (res.success) {
+        this.closeModal();
+        this._renderCourseAssignments(courseId, false);
+        this._toast('✅ Tugas berhasil dikirim!');
+      } else alert(res.message);
+    });
+  },
+
+  openAddAssignmentModal(courseId) {
+    this.openModal('Buat Tugas Pembelajaran Baru', `
+      <form onsubmit="App.handleAddAssignment(event, ${courseId})">
+        <div class="form-group mb-2"><label class="form-label">Judul Tugas</label><input type="text" id="asg-title" class="form-control" placeholder="cth: Tugas 1 - Buat Halaman Web Responsive" required></div>
+        <div class="form-group mb-2"><label class="form-label">Deskripsi / Petunjuk Pengerjaan</label><textarea id="asg-desc" class="form-control" rows="3" placeholder="Petunjuk pengerjaan dan kriteria penilaian..."></textarea></div>
+        <div class="grid-2col mb-3" style="gap:0.75rem;">
+          <div class="form-group"><label class="form-label">Tenggat Waktu (Due Date)</label><input type="datetime-local" id="asg-due" class="form-control"></div>
+          <div class="form-group"><label class="form-label">Nilai Maksimal</label><input type="number" id="asg-max" class="form-control" value="100" min="10" max="100"></div>
+        </div>
+        <div class="flex-end flex-gap-1"><button type="button" class="btn btn-secondary" onclick="App.closeModal()">Batal</button><button type="submit" class="btn btn-primary">Simpan Tugas</button></div>
+      </form>
+    `);
+  },
+
+  handleAddAssignment(e, courseId) {
+    e.preventDefault();
+    const dueVal = document.getElementById('asg-due').value;
+    const body = {
+      title: document.getElementById('asg-title').value,
+      description: document.getElementById('asg-desc').value,
+      due_date: dueVal ? dueVal.replace('T', ' ') : null,
+      max_score: document.getElementById('asg-max').value
+    };
+    fetch(`api/course_detail.php?action=add_assignment&course_id=${courseId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(r => r.json()).then(res => {
+      if (res.success) {
+        this.closeModal();
+        this._renderCourseAssignments(courseId, true);
+        this._toast('✅ Tugas berhasil dibuat!');
+      } else alert(res.message);
+    });
   },
 
   _renderCourseDiscussions(courseId) {
@@ -1252,11 +1435,12 @@ const App = {
           <tr>
             <td class="td-mono">${i + 1}</td>
             <td class="td-main">${this.escHtml(cl.class_name)}</td>
+            <td><span class="badge badge-amber">${this.escHtml(cl.major || 'Umum')}</span></td>
             <td>${this.escHtml(cl.academic_year)}</td>
-            <td><span class="badge badge-cyan">${cl.student_count || 0} siswa</span></td>
-            <td>${isStaff ? `<button class="btn btn-danger btn-sm" onclick="App.deleteClass(${cl.id})">🗑️</button>` : '—'}</td>
+            <td><span class="badge badge-cyan">${cl.total_students !== undefined ? cl.total_students : (cl.student_count || 0)} siswa</span></td>
+            <td>${isStaff ? `<button class="btn btn-danger btn-sm" onclick="App.deleteClass(${cl.id})">🗑️ Hapus</button>` : '—'}</td>
           </tr>
-        `).join('') : `<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🏛️</div><p>Belum ada kelas.</p></div></td></tr>`;
+        `).join('') : `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🏛️</div><p>Belum ada kelas.</p></div></td></tr>`;
 
         this.setContent(`
           <div class="flex-between mb-3">
@@ -1269,7 +1453,7 @@ const App = {
           <div class="card">
             <div class="table-wrapper">
               <table class="data-table">
-                <thead><tr><th>#</th><th>Nama Kelas</th><th>Tahun Ajaran</th><th>Jumlah Siswa</th><th>Aksi</th></tr></thead>
+                <thead><tr><th>#</th><th>Nama Kelas</th><th>Jurusan</th><th>Tahun Ajaran</th><th>Jumlah Siswa</th><th>Aksi</th></tr></thead>
                 <tbody>${rows}</tbody>
               </table>
             </div>
@@ -1281,16 +1465,43 @@ const App = {
   openAddClassModal() {
     this.openModal('Tambah Kelas / Rombel Baru', `
       <form onsubmit="App.handleAddClass(event)">
-        <div class="form-group mb-2"><label class="form-label">Nama Kelas</label><input type="text" id="cl-name" class="form-control" placeholder="cth: X RPL 1" required></div>
-        <div class="form-group mb-3"><label class="form-label">Tahun Ajaran</label><input type="text" id="cl-year" class="form-control" value="2026/2027" required></div>
-        <div class="flex-end flex-gap-1"><button type="button" class="btn btn-secondary" onclick="App.closeModal()">Batal</button><button type="submit" class="btn btn-primary">Simpan Kelas</button></div>
+        <div class="form-group mb-2">
+          <label class="form-label">Nama Kelas / Rombel</label>
+          <input type="text" id="cl-name" class="form-control" placeholder="cth: XI SIJA 1 atau XI SIJA 2" required>
+        </div>
+        <div class="form-group mb-2">
+          <label class="form-label">Jurusan</label>
+          <select id="cl-major" class="form-control">
+            <option value="RPL">RPL (Rekayasa Perangkat Lunak)</option>
+            <option value="SIJA">SIJA (Sistem Informatika Jaringan & Aplikasi)</option>
+            <option value="TKJ">TKJ (Teknik Komputer & Jaringan)</option>
+            <option value="Umum">Umum</option>
+          </select>
+        </div>
+        <div class="form-group mb-3">
+          <label class="form-label">Tahun Ajaran</label>
+          <input type="text" id="cl-year" class="form-control" value="2026/2027" required>
+        </div>
+        <div class="flex-end flex-gap-1">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Batal</button>
+          <button type="submit" class="btn btn-primary">Simpan Kelas</button>
+        </div>
       </form>
     `);
   },
 
   handleAddClass(e) {
     e.preventDefault();
-    fetch('api/classes.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', class_name: document.getElementById('cl-name').value, academic_year: document.getElementById('cl-year').value }) })
+    fetch('api/classes.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create',
+        class_name: document.getElementById('cl-name').value,
+        major: document.getElementById('cl-major').value,
+        academic_year: document.getElementById('cl-year').value
+      })
+    })
       .then(r => r.json()).then(d => { if (d.success) { this.closeModal(); this.loadClasses(); } else alert(d.message); });
   },
 
@@ -1429,9 +1640,12 @@ const App = {
             <div class="quiz-card-actions">
               <button class="btn btn-outline btn-full" onclick="App.openManageQuestions(${q.id})">📝 Kelola Soal (${qCount})</button>
               <div class="flex-gap-1 mt-1">
+                <button class="btn btn-secondary" style="flex:1;justify-content:center;" onclick="App.openExamResultsPanel(${q.id})">📊 Hasil & Reset</button>
                 <button class="btn btn-secondary" style="flex:1;justify-content:center;" onclick="App.openMonitoringModal(${q.id})">🛡️ Monitoring</button>
-                <button class="btn btn-secondary btn-sm" onclick="App.openEditQuizModal(${q.id})" title="Edit Ujian">✏️</button>
-                <button class="btn btn-danger btn-sm" onclick="App.deleteQuiz(${q.id})" title="Hapus Ujian">🗑️</button>
+              </div>
+              <div class="flex-gap-1 mt-1">
+                <button class="btn btn-secondary btn-sm" onclick="App.openEditQuizModal(${q.id})" title="Edit Ujian" style="flex:1;">✏️ Edit</button>
+                <button class="btn btn-danger btn-sm" onclick="App.deleteQuiz(${q.id})" title="Hapus Ujian" style="flex:1;">🗑️ Hapus</button>
               </div>
             </div>
           </div>
@@ -1842,10 +2056,85 @@ const App = {
   },
 
   resetStudentExam(attemptId, studentName, quizId) {
-    if (!confirm(`Reset ujian untuk "${studentName}"?\n\nSemua jawaban, skor, dan status diskualifikasi akan dihapus. Siswa dapat mengerjakan kembali dari awal.`)) return;
-    fetch('api/exam.php?action=reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attempt_id: attemptId }) })
+    if (!confirm(`⚠️ Reset Ujian — "${studentName}"\n\nSemua jawaban, skor, pelanggaran, dan status akan dihapus.\nSiswa dapat mengerjakan kembali dari awal.\n\nLanjutkan?`)) return;
+    fetch('api/exam.php?action=reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attempt_id: attemptId })
+    })
       .then(r => r.json())
-      .then(d => { alert(d.message); this.openMonitoringModal(quizId); });
+      .then(d => {
+        this._toast(d.success ? `✅ Ujian "${studentName}" berhasil direset.` : `❌ ${d.message}`);
+        if (d.success) this.openExamResultsPanel(quizId);
+      });
+  },
+
+  // ADMIN/GURU — Panel Hasil & Reset Ujian per-Paket
+  openExamResultsPanel(quizId) {
+    fetch(`api/exam.php?action=results&quiz_id=${quizId}`)
+      .then(r => r.json())
+      .then(data => {
+        const attempts = data.attempts || [];
+        const total    = attempts.length;
+        const selesai  = attempts.filter(a => a.status === 'completed').length;
+        const berlangsung = attempts.filter(a => a.status === 'in_progress').length;
+        const disq     = attempts.filter(a => a.status === 'disqualified').length;
+        const avgSkor  = selesai ? (attempts.filter(a=>a.status==='completed').reduce((s,a)=>s+parseFloat(a.score||0),0)/selesai).toFixed(1) : '-';
+
+        const rows = attempts.length ? attempts.map(att => {
+          const statusBadge =
+            att.status === 'completed'   ? `<span class="badge badge-green">✅ Selesai</span>` :
+            att.status === 'in_progress' ? `<span class="badge badge-cyan">🔄 Berlangsung</span>` :
+            att.status === 'disqualified'? `<span class="badge badge-danger">🚫 Diskualifikasi</span>` :
+                                           `<span class="badge badge-muted">${att.status}</span>`;
+
+          const violBadge = att.violations_count >= 3
+            ? `<span class="badge badge-danger">${att.violations_count}x ⚠️</span>`
+            : att.violations_count > 0
+              ? `<span class="badge badge-amber">${att.violations_count}x</span>`
+              : `<span class="badge badge-green">0</span>`;
+
+          const mulai = att.started_at  ? att.started_at.substring(0,16).replace('T',' ')  : '-';
+          const selesaiAt = att.finished_at ? att.finished_at.substring(0,16).replace('T',' ') : '-';
+
+          return `
+            <tr style="${att.status==='disqualified'?'background:rgba(239,68,68,0.05);':''}">
+              <td>
+                <div class="font-700">${this.escHtml(att.student_name)}</div>
+                <div class="td-mono" style="font-size:0.77rem;">NIS: ${this.escHtml(att.student_nis || att.student_username || '-')}</div>
+              </td>
+              <td>${statusBadge}</td>
+              <td><span class="font-mono font-800" style="font-size:1.05rem;color:var(--cyan);">${att.status==='completed'?att.score:'-'}</span>${att.status==='completed'?'<span class="text-muted">/100</span>':''}</td>
+              <td>${violBadge}</td>
+              <td style="font-size:0.78rem;color:var(--text-muted);">${mulai}</td>
+              <td style="font-size:0.78rem;color:var(--text-muted);">${selesaiAt}</td>
+              <td>
+                <button class="btn btn-amber btn-sm" onclick="App.resetStudentExam(${att.id},'${this.escHtml(att.student_name)}',${quizId})" title="Hapus attempt dan izinkan siswa mengulang ujian">
+                  🔄 Reset
+                </button>
+              </td>
+            </tr>`;
+        }).join('') : `<tr><td colspan="7"><div class="empty-state"><p>Belum ada siswa yang mengerjakan ujian ini.</p></div></td></tr>`;
+
+        this.openModal('📊 Hasil & Manajemen Reset Ujian', `
+          <div class="incident-kpi-bar" style="margin-bottom:1.25rem;">
+            <div class="incident-kpi"><div class="incident-kpi-label text-muted">Total Peserta</div><div class="incident-kpi-val">${total}</div></div>
+            <div class="incident-kpi"><div class="incident-kpi-label" style="color:var(--emerald);">Selesai</div><div class="incident-kpi-val text-green">${selesai}</div></div>
+            <div class="incident-kpi"><div class="incident-kpi-label" style="color:var(--cyan);">Berlangsung</div><div class="incident-kpi-val" style="color:var(--cyan);">${berlangsung}</div></div>
+            <div class="incident-kpi"><div class="incident-kpi-label" style="color:var(--danger);">Diskualifikasi</div><div class="incident-kpi-val text-danger">${disq}</div></div>
+            <div class="incident-kpi"><div class="incident-kpi-label" style="color:var(--amber);">Rata-rata Skor</div><div class="incident-kpi-val" style="color:var(--amber);">${avgSkor}</div></div>
+          </div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">
+            💡 Klik <b>Reset</b> untuk menghapus attempt siswa — siswa dapat mengerjakan kembali dari awal.
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr><th>Siswa</th><th>Status</th><th>Skor</th><th>Pelanggaran</th><th>Dimulai</th><th>Selesai</th><th>Aksi</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `, 'modal-box modal-box-lg');
+      });
   },
 
   // STUDENT CBT VIEW
@@ -1858,10 +2147,37 @@ const App = {
           const att = q.my_attempt || (q.attempt_status ? { status: q.attempt_status, score: q.attempt_score, id: q.attempt_id } : null);
           const qCount = q.total_questions !== undefined ? q.total_questions : (q.question_count !== undefined ? q.question_count : 0);
           let action = '';
-          if (!att) action = `<button class="btn btn-primary btn-full" onclick="App.confirmStartExam(${q.id},'${this.escHtml(q.title)}')">🚀 Mulai Ujian</button>`;
-          else if (att.status === 'in_progress') action = `<button class="btn btn-amber btn-full" onclick="App.startExam(${q.id})">▶️ Lanjutkan Ujian</button>`;
-          else if (att.status === 'disqualified') action = `<div style="background:var(--danger-dim);border:1px solid rgba(239,68,68,0.3);padding:0.75rem;border-radius:var(--r-md);text-align:center;"><span class="text-danger font-700">🚫 Didiskualifikasi (Keluar tab > 3x)</span><br><small class="text-muted">Lapor ke Admin/Guru untuk Reset Ujian</small></div>`;
-          else action = `<div style="background:var(--emerald-dim);border:1px solid rgba(16,185,129,0.3);padding:0.75rem;border-radius:var(--r-md);text-align:center;"><span class="text-green font-700">✅ Ujian Selesai</span><br><span style="font-size:1.2rem;font-weight:800;color:var(--cyan);">Skor: ${att.score} / 100</span></div>`;
+
+          if (!att) {
+            // Belum pernah mengerjakan
+            action = `<button class="btn btn-primary btn-full" onclick="App.confirmStartExam(${q.id},'${this.escHtml(q.title)}')">🚀 Mulai Ujian</button>`;
+          } else if (att.status === 'in_progress') {
+            // Sedang berlangsung (resume)
+            action = `<button class="btn btn-amber btn-full" onclick="App.startExam(${q.id})">▶️ Lanjutkan Ujian</button>`;
+          } else if (att.status === 'disqualified') {
+            // Diskualifikasi
+            action = `
+              <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);padding:0.85rem;border-radius:var(--r-md);text-align:center;">
+                <div style="font-size:1.5rem;margin-bottom:0.3rem;">🚫</div>
+                <div class="font-700 text-danger">Didiskualifikasi</div>
+                <div class="text-muted" style="font-size:0.78rem;margin-top:0.25rem;">Keluar layar lebih dari 3x. Hubungi Admin/Guru untuk Reset Ujian.</div>
+              </div>`;
+          } else if (att.status === 'completed') {
+            // ── SELESAI: ONE-ATTEMPT LOCK ──────────────────────────────────────
+            const skor = parseFloat(att.score || 0);
+            const kkm  = parseFloat(q.kkm || 70);
+            const lulus = skor >= kkm;
+            action = `
+              <div style="background:${lulus ? 'rgba(16,185,129,0.08)' : 'rgba(249,115,22,0.08)'};border:1px solid ${lulus ? 'rgba(16,185,129,0.35)' : 'rgba(249,115,22,0.35)'};padding:0.85rem;border-radius:var(--r-md);text-align:center;">
+                <div style="font-size:1.4rem;margin-bottom:0.3rem;">${lulus ? '✅' : '📋'}</div>
+                <div class="font-700" style="color:${lulus ? 'var(--emerald)' : 'var(--amber)'};">${lulus ? 'Ujian Selesai — LULUS' : 'Ujian Selesai'}</div>
+                <div style="font-size:1.5rem;font-weight:900;margin:0.3rem 0;color:var(--cyan);">${skor} <span style="font-size:0.9rem;font-weight:400;color:var(--text-muted);">/ 100</span></div>
+                <div style="font-size:0.75rem;color:var(--text-muted);">KKM: ${kkm} &nbsp;|&nbsp; Ujian hanya boleh dikerjakan 1x</div>
+              </div>`;
+          } else {
+            // Fallback
+            action = `<div class="text-muted" style="text-align:center;padding:0.5rem;">Status tidak diketahui</div>`;
+          }
 
           return `
             <div class="quiz-card">
@@ -1869,6 +2185,7 @@ const App = {
                 <div class="quiz-card-meta">
                   <span class="badge badge-cyan">${qCount} Soal</span>
                   <span class="badge badge-amber">⏱ ${q.duration_minutes} Menit</span>
+                  ${q.kkm ? `<span class="badge badge-muted">KKM ${q.kkm}</span>` : ''}
                 </div>
                 <div class="quiz-card-title">${this.escHtml(q.title)}</div>
                 <div class="quiz-card-desc">${this.escHtml(q.description || 'Kerjakan dengan jujur dan teliti.')}</div>
@@ -1881,7 +2198,7 @@ const App = {
         this.setContent(`
           <div class="mb-3">
             <div class="section-title">📝 Ujian CBT Online</div>
-            <div class="section-sub">Pilih paket ujian aktif. Selama ujian, dilarang berpindah tab atau meminimalkan layar.</div>
+            <div class="section-sub">Pilih paket ujian aktif. Setiap ujian hanya dapat dikerjakan <b>1 (satu) kali</b>. Dilarang berpindah tab atau meminimalkan layar selama ujian.</div>
           </div>
           <div class="cards-grid">${cards}</div>
         `);
@@ -1889,23 +2206,136 @@ const App = {
   },
 
   confirmStartExam(quizId, title) {
-    this.openModal('🔒 Konfirmasi Proteksi Anti-Cheating', `
+    // Stop any leftover modal preview stream before opening new modal
+    if (this._modalPreviewStream) {
+      this._modalPreviewStream.getTracks().forEach(t => t.stop());
+      this._modalPreviewStream = null;
+    }
+
+    this.openModal('🔒 Konfirmasi Ujian & Perizinan Kamera', `
       <div style="text-align:center;">
-        <div style="font-size:3.5rem;margin-bottom:1rem;">🛡️</div>
-        <h2 style="font-size:1.2rem;margin-bottom:0.75rem;">Ujian: ${this.escHtml(title)}</h2>
-        <p style="color:var(--text-sub);font-size:0.88rem;line-height:1.7;margin-bottom:1.5rem;">
-          Ujian ini menggunakan sistem <b>E-Learning SMKN 1 CIBINONG Anti-Cheat Guard</b>.<br>
-          1. Layar dikunci ke mode <b>Layar Penuh (Fullscreen)</b>.<br>
-          2. <b>DILARANG</b> berpindah tab, membuka jendela lain, atau menekan Alt+Tab.<br>
-          3. Berpindah tab <b>&gt; 3x</b> → Otomatis <b style="color:var(--danger);">DIDISKUALIFIKASI</b>.<br>
-          <span style="font-style:italic;color:var(--text-muted);">(Kendala teknis? Lapor ke Pengawas/Admin untuk Reset Ujian.)</span>
+        <div style="font-size:3rem;margin-bottom:0.5rem;">📷</div>
+        <h2 style="font-size:1.15rem;margin-bottom:0.5rem;">Ujian: ${this.escHtml(title)}</h2>
+        <p style="color:var(--text-sub);font-size:0.85rem;line-height:1.6;margin-bottom:1rem;">
+          Ujian ini dilindungi oleh <b>E-Learning SMKN 1 CIBINONG Anti-Cheat Guard &amp; Live Proctoring</b>.<br>
+          Kamera depan/webcam wajib diizinkan selama ujian berlangsung.
         </p>
+
+        <!-- Camera Preview Box inside Modal -->
+        <div style="width:200px;height:150px;background:#000;border-radius:var(--r-md);margin:0 auto 1rem;position:relative;overflow:hidden;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;">
+          <video id="modal-cam-preview" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+          <div id="modal-cam-placeholder" style="text-align:center;padding:0.5rem;color:var(--text-muted);font-size:0.75rem;">
+            <div style="font-size:1.8rem;margin-bottom:0.2rem;">📹</div>
+            <span id="modal-cam-placeholder-text">Menginisialisasi kamera…</span>
+          </div>
+        </div>
+        <div id="cam-prep-status-box" style="margin-bottom:1.25rem;">
+          <span class="badge badge-amber" id="cam-prep-status">⏳ Meminta izin kamera dari browser…</span>
+        </div>
+
         <div style="display:flex;gap:0.5rem;justify-content:center;">
-          <button class="btn btn-secondary" onclick="App.closeModal()">Batal</button>
-          <button class="btn btn-primary" onclick="App.closeModal();App.startExam(${quizId});">Saya Paham, Mulai Ujian 🚀</button>
+          <button class="btn btn-secondary" id="btn-cancel-cbt" onclick="App._cancelModalCam(); App.closeModal();">Batal</button>
+          <button class="btn btn-primary" id="btn-start-cbt-exec" disabled
+            style="opacity:0.55;cursor:not-allowed;"
+            onclick="App.execStartExamDirect(${quizId})">
+            🚀 Saya Paham, Mulai Ujian
+          </button>
         </div>
       </div>
     `);
+
+    // Defer camera trigger by one microtask tick so DOM is fully committed
+    setTimeout(() => this._triggerModalCamera(quizId), 0);
+  },
+
+  // Internal: stop modal preview stream on cancel
+  _cancelModalCam() {
+    if (this._modalPreviewStream) {
+      this._modalPreviewStream.getTracks().forEach(t => t.stop());
+      this._modalPreviewStream = null;
+    }
+  },
+
+  // Internal: async camera init for modal with clean try/catch
+  async _triggerModalCamera(quizId) {
+    const getEl = id => document.getElementById(id);
+    const btn     = getEl('btn-start-cbt-exec');
+    const video   = getEl('modal-cam-preview');
+    const ph      = getEl('modal-cam-placeholder');
+    const phText  = getEl('modal-cam-placeholder-text');
+    const statusBox = getEl('cam-prep-status-box');
+
+    // Guard: modal might have been closed before this tick
+    if (!btn) return;
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      // Browser doesn't support getUserMedia — allow start anyway
+      if (statusBox) statusBox.innerHTML = `<span class="badge badge-amber">⚠️ Browser tidak mendukung kamera. Mode standar aktif.</span>`;
+      this._enableStartBtn(btn);
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: 'user' }
+      });
+
+      // Guard again: user might have clicked Batal while waiting
+      if (!getEl('btn-start-cbt-exec')) {
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+
+      this._modalPreviewStream = stream;
+      this.proctorStream = stream; // reuse stream in actual exam — avoids double getUserMedia
+
+      if (video)  { video.srcObject = stream; video.style.display = 'block'; }
+      if (ph)     { ph.style.display = 'none'; }
+      if (statusBox) statusBox.innerHTML = `<span class="badge badge-green">✅ Kamera Aktif — Siap Ujian</span>`;
+      this._enableStartBtn(btn);
+
+    } catch (err) {
+      console.warn('[CBT] Camera permission denied or unavailable:', err);
+
+      // Guard: modal might be gone
+      if (!getEl('btn-start-cbt-exec')) return;
+
+      let msg = '⚠️ Kamera tidak dapat diakses.';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        msg = '🚫 Izin kamera ditolak. Ujian berjalan tanpa proctoring kamera.';
+      } else if (err.name === 'NotFoundError') {
+        msg = '📷 Tidak ada kamera terdeteksi. Ujian berjalan tanpa proctoring kamera.';
+      }
+
+      if (phText)  phText.textContent = 'Kamera tidak tersedia.';
+      if (statusBox) statusBox.innerHTML = `<span class="badge badge-danger">${msg}</span>`;
+      // Still allow exam to start — camera is optional failsafe
+      this._enableStartBtn(btn);
+    }
+  },
+
+  // Internal: visually enable the Start Exam button
+  _enableStartBtn(btn) {
+    if (!btn) return;
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor  = 'pointer';
+    btn.focus();
+  },
+
+  execStartExamDirect(quizId) {
+    // Clean up the modal preview reference (stream stays alive via this.proctorStream)
+    this._modalPreviewStream = null;
+    this.closeModal();
+
+    // Request fullscreen immediately (must be called within user gesture / click handler)
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(e => console.warn('[CBT] Fullscreen request failed:', e));
+    } else if (window.ExamGuard && ExamGuard.requestFullscreen) {
+      window.ExamGuard.requestFullscreen();
+    }
+
+    this.startExam(quizId);
   },
 
   startExam(quizId) {
@@ -1922,10 +2352,100 @@ const App = {
 
         if (!this.questions.length) { alert('Belum ada soal pada ujian ini.'); return; }
 
-        window.ExamGuard.start(this.attemptId, data.violations_count || 0, v => this.onViolation(v), d => this.onDisqualified(d));
+        document.body.classList.add('exam-mode-active');
+        if (window.ExamGuard) {
+          window.ExamGuard.start(this.attemptId, data.violations_count || 0, v => this.onViolation(v), d => this.onDisqualified(d));
+        }
         this.startTimer(this.currentQuiz.duration_minutes * 60);
         this.renderExamScreen();
+        this.startProctoringWebcam();
       });
+  },
+
+  startProctoringWebcam(onReady) {
+    if (window.ExamGuard) window.ExamGuard.pauseBlurDetection(6000);
+
+    if (this.proctorStream) {
+      const videoEl = document.getElementById('proctor-live-video');
+      if (videoEl) {
+        videoEl.srcObject = this.proctorStream;
+        videoEl.play().catch(e => console.warn("Video play error:", e));
+      }
+      this._startSnapshotLoop();
+      if (onReady) onReady();
+      return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.warn("Webcam not supported on this browser.");
+      if (onReady) onReady();
+      return;
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 320 }, height: { ideal: 240 } } })
+      .then(stream => {
+        this.proctorStream = stream;
+        const videoEl = document.getElementById('proctor-live-video');
+        if (videoEl) {
+          videoEl.srcObject = stream;
+          videoEl.play().catch(e => console.warn("Video play error:", e));
+        }
+
+        this._startSnapshotLoop();
+        if (onReady) onReady();
+      })
+      .catch(err => {
+        console.warn("Camera access permission denied or unavailable:", err);
+        if (onReady) onReady();
+      });
+  },
+
+  _startSnapshotLoop() {
+    if (this.proctorSnapshotTimer) clearInterval(this.proctorSnapshotTimer);
+    this.proctorSnapshotTimer = setInterval(() => {
+      this.captureAndUploadSnapshot();
+    }, 12000);
+
+    setTimeout(() => {
+      this.captureAndUploadSnapshot();
+    }, 2000);
+  },
+
+  captureAndUploadSnapshot() {
+    if (!this.attemptId) return;
+    const videoEl = document.getElementById('proctor-live-video');
+    if (!videoEl || videoEl.readyState !== 4) return;
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 320;
+      canvas.height = 240;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+
+      fetch('api/exam.php?action=save_snapshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          attempt_id: this.attemptId,
+          image_data: dataUrl
+        })
+      }).catch(e => console.warn("Snapshot upload error:", e));
+    } catch (e) {
+      console.warn("Canvas capture error:", e);
+    }
+  },
+
+  stopProctoringWebcam() {
+    if (this.proctorSnapshotTimer) {
+      clearInterval(this.proctorSnapshotTimer);
+      this.proctorSnapshotTimer = null;
+    }
+    if (this.proctorStream) {
+      this.proctorStream.getTracks().forEach(track => track.stop());
+      this.proctorStream = null;
+    }
   },
 
   onViolation(v) {
@@ -1952,6 +2472,8 @@ const App = {
   },
 
   onDisqualified(d) {
+    document.body.classList.remove('exam-mode-active');
+    this.stopProctoringWebcam();
     if (this.timerInterval) clearInterval(this.timerInterval);
     let modal = document.createElement('div');
     modal.className = 'modal-backdrop';
@@ -1995,12 +2517,13 @@ const App = {
             <!-- Camera HUD -->
             <div class="cam-hud">
               <div class="cam-screen">
-                <div class="cam-scan-box"></div>
-                <div class="cam-rec-dot"></div>
+                <video id="proctor-live-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;z-index:1;"></video>
+                <div class="cam-scan-box" style="z-index:2;position:relative;"></div>
+                <div class="cam-rec-dot" style="z-index:3;"></div>
               </div>
               <div class="cam-meta">
                 <span>PROCTOR FEED</span>
-                <span style="color:var(--emerald);">● Biometric OK</span>
+                <span style="color:var(--emerald);">● Kamera Aktif</span>
               </div>
             </div>
 
@@ -2092,6 +2615,15 @@ const App = {
       </div>
     `;
 
+    // Reattach proctor video stream to video element if stream active
+    if (this.proctorStream) {
+      const vEl = document.getElementById('proctor-live-video');
+      if (vEl) {
+        vEl.srcObject = this.proctorStream;
+        vEl.play().catch(e => console.warn("Video play error on re-render:", e));
+      }
+    }
+
     this.updateTimerDisplay();
   },
 
@@ -2155,6 +2687,8 @@ const App = {
   },
 
   submitExam(auto) {
+    document.body.classList.remove('exam-mode-active');
+    this.stopProctoringWebcam();
     if (this.timerInterval) clearInterval(this.timerInterval);
     window.ExamGuard.stop();
     fetch('api/exam.php?action=submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attempt_id: this.attemptId, quiz_id: this.currentQuiz.id }) })
@@ -2175,6 +2709,139 @@ const App = {
             </div>
           </div>
         `);
+      });
+  },
+
+  /* ────────────────────────────────────────────────────────────────────────────
+     REAL-TIME PROCTORING DASHBOARD
+  ──────────────────────────────────────────────────────────────────────────── */
+  loadProctoringDashboard() {
+    fetch('api/quizzes.php')
+      .then(r => r.json())
+      .then(d => {
+        const quizzes = d.quizzes || d.data || [];
+        const qOpts = quizzes.map(q => `<option value="${q.id}">${this.escHtml(q.title)}</option>`).join('');
+
+        this.setContent(`
+          <div class="flex-between mb-3">
+            <div>
+              <div class="section-title">🛡️ Laman Pengawasan Ujian Real-Time (Proctoring Center)</div>
+              <div class="section-sub">Monitoring live camera feed, status koneksi, dan deteksi kecurangan siswa SMKN 1 CIBINONG.</div>
+            </div>
+            <div class="flex-gap-1">
+              <button class="btn btn-secondary" onclick="App.refreshProctoringGrid()">🔄 Refresh Manual</button>
+            </div>
+          </div>
+
+          <div class="card mb-3">
+            <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+              <div class="form-group" style="flex:1;min-width:220px;margin:0;">
+                <label class="form-label" style="font-size:0.78rem;margin-bottom:0.2rem;">Filter Paket Ujian</label>
+                <select id="proctor-quiz-filter" class="form-control" onchange="App.refreshProctoringGrid()">
+                  <option value="0">-- Semua Ujian Aktif --</option>
+                  ${qOpts}
+                </select>
+              </div>
+              <div style="display:flex;gap:1.5rem;align-items:center;margin-left:auto;background:var(--bg-canvas);padding:0.6rem 1rem;border-radius:var(--r-md);border:1px solid var(--border-subtle);">
+                <div><small style="color:var(--text-muted);display:block;font-size:0.7rem;">STATUS MONITORING</small><span style="color:var(--emerald);font-weight:700;font-size:0.85rem;">● Live Sync (Setiap 10s)</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="proctoring-grid-container">
+            <div class="boot-screen"><div class="boot-shield"><div class="boot-text">Memuat data pengawasan…</div></div></div>
+          </div>
+        `);
+
+        this.refreshProctoringGrid();
+
+        if (this.proctorPollTimer) clearInterval(this.proctorPollTimer);
+        this.proctorPollTimer = setInterval(() => {
+          if (document.getElementById('proctoring-grid-container')) {
+            this.refreshProctoringGrid(true);
+          } else {
+            clearInterval(this.proctorPollTimer);
+          }
+        }, 10000);
+      });
+  },
+
+  refreshProctoringGrid(silent = false) {
+    const quizFilter = document.getElementById('proctor-quiz-filter');
+    const quizId = quizFilter ? quizFilter.value : 0;
+    const container = document.getElementById('proctoring-grid-container');
+
+    if (!container) return;
+
+    fetch(`api/exam.php?action=proctor_monitor&quiz_id=${quizId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success) {
+          if (!silent) container.innerHTML = `<div class="empty-state"><p>${d.message || 'Gagal memuat monitoring.'}</p></div>`;
+          return;
+        }
+
+        const attempts = d.attempts || [];
+        if (!attempts.length) {
+          container.innerHTML = `
+            <div class="empty-state card">
+              <div class="empty-icon">🛡️</div>
+              <h3 style="margin-bottom:0.25rem;">Belum ada siswa yang sedang mengerjakan ujian</h3>
+              <p class="text-muted" style="font-size:0.85rem;">Grid kamera dan status realtime akan otomatis tampil ketika siswa memulai ujian CBT.</p>
+            </div>
+          `;
+          return;
+        }
+
+        const cards = attempts.map(att => {
+          const isDisq = att.status === 'disqualified';
+          const isComp = att.status === 'completed';
+          const violCount = att.violations_count || 0;
+          let statusBadge = `<span class="badge badge-cyan">● Sedang Ujian</span>`;
+          if (isDisq) statusBadge = `<span class="badge badge-danger">🚫 Didiskualifikasi</span>`;
+          else if (isComp) statusBadge = `<span class="badge badge-green">✅ Selesai</span>`;
+
+          let violBadge = `<span class="badge badge-green">Violations: ${violCount}/3</span>`;
+          if (violCount === 1 || violCount === 2) violBadge = `<span class="badge badge-amber">Violations: ${violCount}/3</span>`;
+          else if (violCount >= 3 || isDisq) violBadge = `<span class="badge badge-danger">Violations: ${violCount}/3</span>`;
+
+          const snapSrc = att.latest_snapshot ? att.latest_snapshot : '../cbt/images/login-hero.jpg';
+          const snapTime = att.latest_snapshot_time ? new Date(att.latest_snapshot_time).toLocaleTimeString('id-ID') : 'Belum ada feed';
+
+          const logsHtml = (att.cheat_logs || []).map(l => `<div style="font-size:0.7rem;color:var(--danger);margin-top:2px;">⚠️ ${(l.created_at || '').substring(11,19)} - ${this.escHtml(l.details)}</div>`).join('');
+
+          return `
+            <div class="card" style="padding:1rem;border:1px solid ${isDisq ? 'var(--danger)' : 'var(--border)'};position:relative;background:var(--bg-card);">
+              <div style="display:flex;gap:0.75rem;align-items:flex-start;">
+                <!-- Snapshot Thumbnail -->
+                <div style="width:110px;height:85px;background:#000;border-radius:var(--r-md);overflow:hidden;position:relative;flex-shrink:0;border:1px solid var(--border);">
+                  <img src="${snapSrc}" style="width:100%;height:100%;object-fit:cover;" alt="Webcam Feed">
+                  <div style="position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,0.7);color:#fff;font-size:0.6rem;padding:1px 4px;border-radius:3px;">📷 ${snapTime}</div>
+                  <div style="position:absolute;top:3px;left:3px;width:7px;height:7px;border-radius:50%;background:${isDisq ? 'var(--danger)' : 'var(--emerald)'};"></div>
+                </div>
+
+                <!-- Info -->
+                <div style="flex:1;min-width:0;">
+                  <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-bottom:0.25rem;">
+                    ${statusBadge}
+                    ${violBadge}
+                  </div>
+                  <div style="font-weight:700;font-size:0.95rem;color:var(--text-main);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this.escHtml(att.student_name)}</div>
+                  <div style="font-size:0.78rem;color:var(--text-muted);">${this.escHtml(att.class_name || 'Siswa')} · NIS: ${this.escHtml(att.student_nis || att.student_username)}</div>
+                  <div style="font-size:0.75rem;color:var(--cyan);margin-top:0.2rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Ujian: ${this.escHtml(att.quiz_title || '')}</div>
+                </div>
+              </div>
+
+              ${logsHtml ? `<div style="background:var(--danger-dim);border:1px solid rgba(239,68,68,0.2);padding:0.4rem 0.6rem;border-radius:var(--r-sm);margin-top:0.75rem;">${logsHtml}</div>` : ''}
+
+              <div style="display:flex;gap:0.5rem;margin-top:0.75rem;padding-top:0.6rem;border-top:1px solid var(--border-subtle);">
+                <button class="btn btn-secondary btn-sm" style="flex:1;justify-content:center;" onclick="App.resetStudentExam(${att.id})">🔄 Reset Ujian</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        container.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(320px, 1fr));gap:1rem;">${cards}</div>`;
       });
   },
 
@@ -2908,12 +3575,14 @@ const App = {
     fetch('api/classes.php').then(r => r.json()).then(res => {
       const sel = document.getElementById('grades-class-filter');
       if (!sel) return;
-      (res.data || []).forEach(c => sel.add(new Option(c.class_name, c.id)));
+      const list = res.classes || res.data || [];
+      list.forEach(c => sel.add(new Option(c.class_name || c.name, c.id)));
     });
     fetch('api/courses.php').then(r => r.json()).then(res => {
       const sel = document.getElementById('grades-course-filter');
       if (!sel) return;
-      (res.data || []).forEach(c => sel.add(new Option(c.course_name, c.id)));
+      const list = res.courses || res.data || [];
+      list.forEach(c => sel.add(new Option(c.course_name || c.name, c.id)));
     });
   },
 

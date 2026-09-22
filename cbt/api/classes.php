@@ -17,7 +17,7 @@ $method = $_SERVER['REQUEST_METHOD'];
 if ($method === 'GET') {
     $stmt = $pdo->prepare("
         SELECT c.*, 
-        (SELECT COUNT(*) FROM users WHERE class_id = c.id AND role='siswa') as total_students
+        (SELECT COUNT(*) FROM users u WHERE u.role='siswa' AND (u.class_id = c.id OR (u.major = c.major AND c.major != 'Umum' AND (u.class_id IS NULL OR u.class_id = c.id)))) as total_students
         FROM classes c 
         ORDER BY c.class_name ASC
     ");
@@ -36,24 +36,25 @@ if ($method === 'POST') {
     }
 
     $raw = file_get_contents('php://input');
-    $data = json_decode($raw, true);
-    $action = $data['action'] ?? $_POST['action'] ?? 'create';
+    $data = json_decode($raw, true) ?? $_POST;
+    $action = $data['action'] ?? 'create';
 
     if ($action === 'create') {
         $name = trim($data['class_name'] ?? '');
+        $major = trim($data['major'] ?? 'Umum') ?: 'Umum';
         $year = trim($data['academic_year'] ?? '2026/2027');
 
         if (empty($name)) {
-            echo json_encode(['success' => false, 'message' => 'Nama Kelas wajib diisi (contoh: VII-C).']);
+            echo json_encode(['success' => false, 'message' => 'Nama Kelas wajib diisi (contoh: XI SIJA 1).']);
             exit;
         }
 
-        $stmt = $pdo->prepare("INSERT INTO classes (class_name, academic_year) VALUES (?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO classes (class_name, major, academic_year) VALUES (?, ?, ?)");
         try {
-            $stmt->execute([$name, $year]);
+            $stmt->execute([$name, $major, $year]);
             echo json_encode(['success' => true, 'message' => 'Kelas berhasil ditambahkan!']);
         } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => 'Nama kelas sudah ada.']);
+            echo json_encode(['success' => false, 'message' => 'Nama kelas sudah ada: ' . $e->getMessage()]);
         }
         exit;
     }

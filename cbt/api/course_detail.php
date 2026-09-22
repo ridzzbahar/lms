@@ -144,7 +144,7 @@ if ($method === 'POST' && $action === 'add_material' && in_array($role, ['admin'
 
     $pdo->prepare("INSERT INTO course_materials (course_id, title, type, content_url, content, order_num, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)")
         ->execute([$cid, $title, $type, $url ?: null, $cnt ?: null, $ord, $uid]);
-    echo json_encode(['success' => true, 'id' => $pdo->lastInsertId()]);
+    echo json_encode(['success' => true, 'id' => $pdo->lastInsertId(), 'message' => 'Materi berhasil ditambahkan!']);
     exit;
 }
 
@@ -154,7 +154,63 @@ if ($method === 'DELETE' && $action === 'del_material' && in_array($role, ['admi
     $d   = json_decode($raw, true) ?? $_POST;
     $id  = (int)($d['id'] ?? $_GET['id'] ?? 0);
     $pdo->prepare("DELETE FROM course_materials WHERE id = ? AND course_id = ?")->execute([$id, $cid]);
-    echo json_encode(['success' => true]);
+    echo json_encode(['success' => true, 'message' => 'Materi berhasil dihapus.']);
+    exit;
+}
+
+// ── POST assignment (guru/admin) ───────────────────────────────────────────────
+if ($method === 'POST' && $action === 'add_assignment' && in_array($role, ['admin', 'guru'])) {
+    $raw   = file_get_contents('php://input');
+    $d     = json_decode($raw, true) ?? $_POST;
+    $title = trim($d['title'] ?? '');
+    $desc  = trim($d['description'] ?? '');
+    $due   = trim($d['due_date'] ?? '');
+    $max   = intval($d['max_score'] ?? 100);
+
+    if (!$title) {
+        echo json_encode(['success' => false, 'message' => 'Judul tugas wajib diisi']);
+        exit;
+    }
+
+    $pdo->prepare("INSERT INTO assignments (course_id, title, description, due_date, max_score, created_by) VALUES (?, ?, ?, ?, ?, ?)")
+        ->execute([$cid, $title, $desc ?: null, $due ?: null, $max, $uid]);
+    echo json_encode(['success' => true, 'id' => $pdo->lastInsertId(), 'message' => 'Tugas berhasil dibuat!']);
+    exit;
+}
+
+// ── POST submit assignment (siswa) ─────────────────────────────────────────────
+if ($method === 'POST' && $action === 'submit_assignment' && $role === 'siswa') {
+    $raw    = file_get_contents('php://input');
+    $d      = json_decode($raw, true) ?? $_POST;
+    $aid    = (int)($d['assignment_id'] ?? 0);
+    $notes  = trim($d['notes'] ?? '');
+    $file   = trim($d['file_path'] ?? '');
+
+    if (!$aid) {
+        echo json_encode(['success' => false, 'message' => 'assignment_id required']);
+        exit;
+    }
+
+    $pdo->prepare("INSERT INTO assignment_submissions (assignment_id, student_id, file_path, notes, submitted_at) VALUES (?, ?, ?, ?, NOW())
+        ON DUPLICATE KEY UPDATE file_path = VALUES(file_path), notes = VALUES(notes), submitted_at = NOW()")
+        ->execute([$aid, $uid, $file ?: null, $notes ?: null]);
+
+    echo json_encode(['success' => true, 'message' => 'Tugas berhasil dikirim!']);
+    exit;
+}
+
+// ── GET submissions (guru/admin) ───────────────────────────────────────────────
+if ($action === 'submissions' && in_array($role, ['admin', 'guru'])) {
+    $aid = (int)($_GET['assignment_id'] ?? 0);
+    $q = $pdo->prepare("
+        SELECT s.*, u.name AS student_name, u.nip_nis, u.username
+        FROM assignment_submissions s
+        JOIN users u ON s.student_id = u.id
+        WHERE s.assignment_id = ?
+        ORDER BY s.submitted_at DESC
+    ");
+    $q->execute([$aid]);
+    echo json_encode(['success' => true, 'submissions' => $q->fetchAll()]);
     exit;
 }
 

@@ -10,6 +10,7 @@ window.ExamGuard = {
   violationCount: 0,
   maxViolations: 3,
   lastViolationTime: 0,
+  ignoreBlurUntil: 0,
   onDisqualifiedCallback: null,
   onViolationCallback: null,
 
@@ -21,6 +22,9 @@ window.ExamGuard = {
     this.onViolationCallback = onViolation;
     this.onDisqualifiedCallback = onDisqualified;
 
+    // Set 5 second grace period for blur events so camera/fullscreen permissions do not trigger false violation
+    this.ignoreBlurUntil = Date.now() + 5000;
+
     console.log("ExamGuard initialized for attempt #" + attemptId);
 
     // 1. Force Fullscreen
@@ -28,6 +32,10 @@ window.ExamGuard = {
 
     // 2. Attach Event Listeners
     this.bindEvents();
+  },
+
+  pauseBlurDetection: function(ms = 4000) {
+    this.ignoreBlurUntil = Date.now() + ms;
   },
 
   // Stop protection mode (after submission or exit)
@@ -107,18 +115,24 @@ window.ExamGuard = {
   // Event Listener Handlers
   handleVisibilityChange: function () {
     if (document.hidden) {
+      if (Date.now() < ExamGuard.ignoreBlurUntil) return;
       ExamGuard.triggerViolation('visibility_hidden', 'Berpindah tab atau meminimalkan browser.');
     }
   },
 
   handleWindowBlur: function () {
     if (ExamGuard.active) {
+      if (Date.now() < ExamGuard.ignoreBlurUntil) {
+        console.log("ExamGuard: ignoring window blur during camera permission / dialog grace period.");
+        return;
+      }
       ExamGuard.triggerViolation('window_blur', 'Jendela browser kehilangan fokus (alt-tab / aplikasi lain dibuka).');
     }
   },
 
   handleFullscreenChange: function () {
     if (ExamGuard.active && !document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (Date.now() < ExamGuard.ignoreBlurUntil) return;
       ExamGuard.triggerViolation('fullscreen_exit', 'Pengguna keluar dari mode layar penuh (fullscreen).');
     }
   },

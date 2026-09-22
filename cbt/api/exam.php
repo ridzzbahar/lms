@@ -34,6 +34,23 @@ if ($action === 'start') {
         exit;
     }
 
+    // ── ONE-ATTEMPT-ONLY RULE ─────────────────────────────────────────────────
+    // Block students who already completed the exam from starting again
+    $stmtCompleted = $pdo->prepare("SELECT id, score, finished_at FROM exam_attempts WHERE quiz_id = ? AND user_id = ? AND status = 'completed' ORDER BY id DESC LIMIT 1");
+    $stmtCompleted->execute([$quiz_id, $user_id]);
+    $completedAtt = $stmtCompleted->fetch();
+    if ($completedAtt) {
+        echo json_encode([
+            'success'  => false,
+            'message'  => 'Anda sudah mengerjakan ujian ini dan tidak dapat mengulang kembali. Ujian hanya boleh dikerjakan 1 (satu) kali. Hubungi Admin atau Guru jika diperlukan reset.',
+            'already_completed' => true,
+            'score'    => $completedAtt['score'],
+            'finished_at' => $completedAtt['finished_at']
+        ]);
+        exit;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Check existing ongoing attempt
     $stmtCheck = $pdo->prepare("SELECT * FROM exam_attempts WHERE quiz_id = ? AND user_id = ? AND status = 'in_progress'");
     $stmtCheck->execute([$quiz_id, $user_id]);
@@ -294,4 +311,65 @@ if ($action === 'results' || $action === 'monitor') {
         echo json_encode(['success' => true, 'attempts' => $attempts]);
         exit;
     }
+}
+
+// 7. WEBCAM PROCTOR SNAPSHOT
+if ($action === 'save_snapshot') {
+    $attempt_id = intval($data['attempt_id'] ?? 0);
+    $image_data = trim($data['image_data'] ?? '');
+
+    if ($attempt_id <= 0 || empty($image_data)) {
+        echo json_encode(['success' => false, 'message' => 'Data snapshot tidak lengkap.']);
+        exit;
+    }
+
+    $stmtSnap = $pdo->prepare("INSERT INTO proctor_snapshots (attempt_id, user_id, image_data) VALUES (?, ?, ?)");
+    $stmtSnap->execute([$attempt_id, $user_id, $image_data]);
+
+    echo json_encode(['success' => true]);
+    exit;
+}
+
+// 8. REAL-TIME PROCTORING DASHBOARD (ADMIN & GURU)
+if ($action === 'proctor_monitor') {
+    if ($role !== 'admin' && $role !== 'guru') {
+        echo json_encode(['success' => false, 'message' => 'Akses ditolak.']);
+        exit;
+    }
+
+    $quiz_id = intval($_GET['quiz_id'] ?? 0);
+    $sql = "
+        SELECT ea.*, u.name as student_name, u.username as student_username, u.nip_nis as student_nis,
+               cl.class_name, q.title as quiz_title
+        FROM exam_attempts ea
+        JOIN users u ON ea.user_id = u.id
+        LEFT JOIN classes cl ON u.class_id = cl.id
+        JOIN quizzes q ON ea.quiz_id = q.id
+        WHERE 1=1
+    ";
+    $params = [];
+    if ($quiz_id > 0) {
+        $sql .= " AND ea.quiz_id = ?";
+        $params[] = $quiz_id;
+    }
+    $sql .= " ORDER BY ea.id DESC LIMIT 100";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $attempts = $stmt->fetchAll();
+
+    foreach ($attempts as &$att) {
+        $stLogs = $pdo->prepare("SELECT violation_type, details, created_at FROM cheat_logs WHERE attempt_id = ? ORDER BY id DESC LIMIT 5");
+        $stLogs->execute([$att['id']]);
+        $att['cheat_logs'] = $stLogs->fetchAll();
+
+        $stSnap = $pdo->prepare("SELECT image_data, created_at FROM proctor_snapshots WHERE attempt_id = ? ORDER BY id DESC LIMIT 1");
+        $stSnap->execute([$att['id']]);
+        $snap = $stSnap->fetch();
+        $att['latest_snapshot'] = $snap ? $snap['image_data'] : null;
+        $att['latest_snapshot_time'] = $snap ? $snap['created_at'] : null;
+    }
+
+    echo json_encode(['success' => true, 'attempts' => $attempts]);
+    exit;
 }

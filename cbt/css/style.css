@@ -1557,6 +1557,112 @@ input, select, textarea { font-family: var(--font-body); }
 
 .exam-topbar-right { display: flex; align-items: center; gap: 1rem; }
 
+/* ── EXAM MODE FULLSCREEN OVERRIDE ───────────────────────────────────────────── */
+body.exam-mode-active #main-navbar { display: none !important; }
+body.exam-mode-active #main-sidebar { display: none !important; }
+body.exam-mode-active #sidebar-overlay { display: none !important; }
+body.exam-mode-active .app-layout { padding-top: 0 !important; }
+body.exam-mode-active .main-content { padding: 0 !important; }
+
+/* ── WEBCAM PROCTORING FLOATING WIDGET ──────────────────────────────────────── */
+.proctor-cam-widget {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.95);
+  border: 2px solid #2563eb;
+  border-radius: var(--r-lg);
+  padding: 0.5rem;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  backdrop-filter: blur(8px);
+}
+.proctor-cam-video {
+  width: 140px;
+  height: 105px;
+  object-fit: cover;
+  border-radius: var(--r-md);
+  background: #000;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.proctor-cam-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #10b981;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.pulse-dot-red {
+  width: 7px;
+  height: 7px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: ping 1.2s ease infinite;
+}
+
+/* ── REAL-TIME PROCTORING GRID (ADMIN/GURU) ─────────────────────────────────── */
+.proctor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+.proctor-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--t-fast);
+}
+.proctor-card:hover { transform: translateY(-3px); }
+.proctor-snap-frame {
+  width: 100%;
+  height: 165px;
+  background: #0f172a;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border: 1px solid var(--border-subtle);
+}
+.proctor-snap-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── EXPORT CSV BUTTON HIGH VISIBILITY ──────────────────────────────────────── */
+.btn-export-csv, .rekap-export-bar .btn, .btn-export-excel {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+  z-index: 10 !important;
+  padding: 0.6rem 1.25rem !important;
+  font-size: 0.85rem !important;
+  border-radius: var(--r-md) !important;
+  transition: transform var(--t-fast), box-shadow var(--t-fast) !important;
+  cursor: pointer !important;
+}
+.btn-export-csv:hover, .rekap-export-bar .btn:hover, .btn-export-excel:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.5) !important;
+}
+
 .cam-hud {
   display: flex;
   align-items: center;
@@ -1908,34 +2014,57 @@ input, select, textarea { font-family: var(--font-body); }
   .nav-palette-card { position: static; }
   
   /* Navbar lower z-index than sidebar drawer */
-  .navbar { z-index: 30; }
+  .navbar { z-index: 30 !important; }
+
+  /* Break stacking context containment on mobile layout */
+  .app-layout {
+    position: static !important;
+    z-index: auto !important;
+    padding-left: 0;
+  }
 
   /* Overlay Backdrop: z-index 40 (di atas konten utama, di bawah Mobile Sidebar) */
-  .sidebar-overlay { z-index: 40; }
-  .sidebar-overlay.open { display: block; pointer-events: auto; }
+  .sidebar-overlay {
+    z-index: 40 !important;
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(15, 23, 42, 0.65) !important;
+    backdrop-filter: blur(5px) !important;
+    -webkit-backdrop-filter: blur(5px) !important;
+  }
+  .sidebar-overlay.open { display: block !important; pointer-events: auto !important; }
 
   /* Mobile Sidebar Navigation: z-index 50 (WAJIB di atas Overlay Backdrop & Navbar agar semua menu BISA DIKLIK) */
   .sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    height: 100vh;
-    width: 280px;
-    max-width: 85vw;
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    height: 100vh !important;
+    width: 280px !important;
+    max-width: 85vw !important;
     background: var(--sidebar-bg) !important;
-    border-right: 1px solid var(--sidebar-border);
-    transform: translateX(-100%);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    border-right: 1px solid var(--sidebar-border) !important;
+    transform: translateX(-100%) !important;
+    transition: transform var(--t-fast) ease-in-out !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5) !important;
     z-index: 50 !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    pointer-events: auto;
+    pointer-events: auto !important;
   }
-  .sidebar.open { transform: translateX(0); }
-  .sidebar-mobile-header { display: flex; }
-  .hamburger-btn { display: flex; }
-  .app-layout { padding-left: 0; }
+  .sidebar.open {
+    transform: translateX(0) !important;
+    pointer-events: auto !important;
+  }
+  .sidebar-inner {
+    pointer-events: auto !important;
+  }
+  .sidebar-nav-content, .nav-link {
+    pointer-events: auto !important;
+  }
+  .sidebar-mobile-header { display: flex !important; }
+  .hamburger-btn { display: flex !important; }
   .main-content { padding: 1.25rem; }
   .brand-text .brand-sub { display: none; }
 }

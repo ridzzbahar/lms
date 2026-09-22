@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // cbt/db.php — E-Learning SMKN 1 CIBINONG — DB Connector & Auto-Migration
 $host   = '127.0.0.1';
 $user   = 'root';
@@ -178,6 +178,17 @@ try {
       `user_id` INT NOT NULL,
       `violation_type` VARCHAR(100) NOT NULL,
       `details` VARCHAR(255) DEFAULT NULL,
+      `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (`attempt_id`) REFERENCES `exam_attempts`(`id`) ON DELETE CASCADE,
+      FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+    // proctor_snapshots (Webcam Proctoring Captures)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `proctor_snapshots` (
+      `id` INT AUTO_INCREMENT PRIMARY KEY,
+      `attempt_id` INT NOT NULL,
+      `user_id` INT NOT NULL,
+      `image_data` LONGTEXT NOT NULL,
       `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (`attempt_id`) REFERENCES `exam_attempts`(`id`) ON DELETE CASCADE,
       FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
